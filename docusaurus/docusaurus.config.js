@@ -8,13 +8,13 @@ const config = {
   favicon: 'img/favicon.ico',
 
   // Set the production url of your site here
-  url: 'https://Claude-Code.github.io',
+  url: 'https://Amnaahmed798.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/humanoid-robotics-book/',
 
   // GitHub pages deployment config.
-  organizationName: 'Claude-Code', // Usually your GitHub org/user name.
+  organizationName: 'Amnaahmed798', // Usually your GitHub org/user name.
   projectName: 'humanoid-robotics-book', // Usually your repo name.
 
   onBrokenLinks: 'throw',
@@ -46,7 +46,7 @@ const config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/Claude-Code/humanoid-robotics-book/edit/main/',
+            'https://github.com/Amnaahmed798/humanoid-robotics-book/edit/main/',
         },
         blog: false, // Disable blog for this project
         theme: {
@@ -75,7 +75,7 @@ const config = {
             label: 'Book',
           },
           {
-            href: 'https://github.com/Claude-Code/humanoid-robotics-book',
+            href: 'https://github.com/Amnaahmed798/humanoid-robotics-book',
             label: 'GitHub',
             position: 'right',
           },
