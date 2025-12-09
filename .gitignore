@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Docusaurus build output
+.docusaurus/
+build/
+
+# Environment
+.env
+.venv/
+venv/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+
+# Docusaurus cache
+.docusaurus/

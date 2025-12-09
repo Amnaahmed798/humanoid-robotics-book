@@ -208,3 +208,10 @@ Wait for consent; never auto-create ADRs. Group related decisions (stacks, authe
 
 ## Code Standards
 See `.specify/memory/constitution.md` for code quality, testing, performance, security, and architecture principles.
+
+## Active Technologies
+- Python 3.11 (for ROS 2); specific versions for Unity/Isaac will be detailed in book modules. + ROS 2, Gazebo, Unity, NVIDIA Isaac SDK, LLM/VLA libraries (e.g., OpenAI Whisper). (001-humanoid-robotics-book)
+- N/A for book content; simulator environments will manage their own data. (001-humanoid-robotics-book)
+
+## Recent Changes
+- 001-humanoid-robotics-book: Added Python 3.11 (for ROS 2); specific versions for Unity/Isaac will be detailed in book modules. + ROS 2, Gazebo, Unity, NVIDIA Isaac SDK, LLM/VLA libraries (e.g., OpenAI Whisper).

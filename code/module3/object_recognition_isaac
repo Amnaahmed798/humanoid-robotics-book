@@ -1,0 +1,1015 @@
+# Isaac Object Recognition Project
+
+This directory contains an Isaac-based object recognition project that demonstrates how to use synthetic data generation and training for robotic perception tasks.
+
+## Project Structure
+```
+object_recognition_isaac/
+├── config/
+│   ├── object_recognition.yaml
+│   └── synthetic_data_config.yaml
+├── launch/
+│   └── object_recognition.launch.py
+├── models/
+│   ├── pretrained/
+│   └── trained/
+├── scripts/
+│   ├── train_model.py
+│   ├── generate_synthetic_data.py
+│   └── evaluate_model.py
+├── src/
+│   ├── object_detector.py
+│   ├── synthetic_data_generator.py
+│   └── perception_pipeline.py
+└── data/
+    ├── synthetic/
+    └── real/
+```
+
+## Configuration Files
+
+### config/object_recognition.yaml
+```yaml
+object_recognition:
+  ros__parameters:
+    # Model configuration
+    model_type: "dnn"
+    model_path: "/path/to/trained/model"
+    confidence_threshold: 0.5
+    nms_threshold: 0.4
+
+    # Input configuration
+    input_width: 640
+    input_height: 480
+    input_fps: 30
+
+    # Object classes
+    classes: ["person", "chair", "table", "bottle", "cup", "laptop"]
+
+    # Topic configuration
+    input_topic: "/camera/rgb/image_rect_color"
+    output_topic: "/object_recognition/detections"
+    camera_info_topic: "/camera/rgb/camera_info"
+
+    # Isaac ROS bridge settings
+    enable_visualization: true
+    publish_tf: true
+```
+
+### config/synthetic_data_config.yaml
+```yaml
+synthetic_data_generation:
+  ros__parameters:
+    # Scene configuration
+    scene_type: "indoor_office"
+    num_scenes: 10000
+    objects_per_scene: [1, 5]
+
+    # Domain randomization
+    lighting_randomization:
+      intensity_range: [0.3, 2.0]
+      color_temperature_range: [3000, 8000]
+
+    material_randomization:
+      albedo_range: [[0.1, 0.1, 0.1], [1.0, 1.0, 1.0]]
+      roughness_range: [0.1, 0.9]
+      metallic_range: [0.0, 1.0]
+
+    texture_randomization:
+      scale_range: [0.5, 2.0]
+      rotation_range: [0, 360]
+
+    sensor_randomization:
+      noise_std_range: [0.0, 0.02]
+      blur_range: [0.0, 1.0]
+
+    # Output configuration
+    output_format: "coco"
+    output_directory: "/data/synthetic/object_recognition"
+    save_annotations: true
+    save_depth: true
+    save_normals: false
+```
+
+## Source Code
+
+### src/object_detector.py
+```python
+#!/usr/bin/env python3
+
+"""
+Object Detection Node using Isaac Sim trained models
+"""
+
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image, CameraInfo
+from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
+from geometry_msgs.msg import Point
+from std_msgs.msg import Header
+from cv_bridge import CvBridge
+import numpy as np
+import cv2
+import torch
+import torchvision.transforms as transforms
+from torchvision.models.detection import fasterrcnn_resnet50_fpn
+import yaml
+
+
+class IsaacObjectDetector(Node):
+    """
+    Object detection node using models trained with Isaac Sim synthetic data.
+    """
+
+    def __init__(self):
+        super().__init__('isaac_object_detector')
+
+        # CV Bridge for image conversion
+        self.bridge = CvBridge()
+
+        # Load configuration
+        self.declare_parameters(
+            namespace='',
+            parameters=[
+                ('model_path', '/path/to/model.pth'),
+                ('confidence_threshold', 0.5),
+                ('input_width', 640),
+                ('input_height', 480),
+                ('classes', ['person', 'chair', 'table', 'bottle', 'cup', 'laptop']),
+            ]
+        )
+
+        # Get parameters
+        self.model_path = self.get_parameter('model_path').value
+        self.confidence_threshold = self.get_parameter('confidence_threshold').value
+        self.input_width = self.get_parameter('input_width').value
+        self.input_height = self.get_parameter('input_height').value
+        self.classes = self.get_parameter('classes').value
+
+        # Initialize model
+        self.model = self.load_model()
+        self.model.eval()
+
+        # Image preprocessing
+        self.transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Resize((self.input_height, self.input_width)),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+        # Subscribers
+        self.image_sub = self.create_subscription(
+            Image,
+            '/camera/rgb/image_rect_color',
+            self.image_callback,
+            10
+        )
+
+        self.camera_info_sub = self.create_subscription(
+            CameraInfo,
+            '/camera/rgb/camera_info',
+            self.camera_info_callback,
+            10
+        )
+
+        # Publishers
+        self.detection_pub = self.create_publisher(
+            Detection2DArray,
+            '/object_recognition/detections',
+            10
+        )
+
+        self.visualization_pub = self.create_publisher(
+            Image,
+            '/object_recognition/visualization',
+            10
+        )
+
+        # Internal state
+        self.camera_info = None
+        self.inference_time = 0.0
+
+        self.get_logger().info('Isaac Object Detector initialized')
+
+    def load_model(self):
+        """
+        Load the trained object detection model.
+        """
+        try:
+            # For demonstration, using a pre-trained model
+            # In practice, this would load your Isaac Sim trained model
+            model = fasterrcnn_resnet50_fpn(pretrained=False)
+
+            # Load your trained weights
+            # model.load_state_dict(torch.load(self.model_path))
+
+            return model
+        except Exception as e:
+            self.get_logger().error(f'Failed to load model: {e}')
+            return None
+
+    def image_callback(self, msg):
+        """
+        Process incoming image messages.
+        """
+        if self.model is None:
+            return
+
+        try:
+            # Convert ROS image to OpenCV
+            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+
+            # Perform object detection
+            detections = self.detect_objects(cv_image)
+
+            # Create and publish detection message
+            detection_msg = self.create_detection_message(detections, msg.header)
+            self.detection_pub.publish(detection_msg)
+
+            # Create and publish visualization
+            vis_image = self.draw_detections(cv_image, detections)
+            vis_msg = self.bridge.cv2_to_imgmsg(vis_image, encoding='bgr8')
+            vis_msg.header = msg.header
+            self.visualization_pub.publish(vis_msg)
+
+            self.get_logger().debug(f'Detected {len(detections)} objects')
+
+        except Exception as e:
+            self.get_logger().error(f'Error processing image: {e}')
+
+    def camera_info_callback(self, msg):
+        """
+        Process camera info messages.
+        """
+        self.camera_info = msg
+
+    def detect_objects(self, image):
+        """
+        Perform object detection on the input image.
+        """
+        if self.model is None:
+            return []
+
+        # Preprocess image
+        input_tensor = self.transform(image).unsqueeze(0)  # Add batch dimension
+
+        # Perform inference
+        with torch.no_grad():
+            start_time = self.get_clock().now()
+            outputs = self.model(input_tensor)
+            end_time = self.get_clock().now()
+
+        self.inference_time = (end_time.nanoseconds - start_time.nanoseconds) / 1e9
+
+        # Process outputs
+        detections = []
+        if len(outputs) > 0:
+            # Get the first output (batch size is 1)
+            output = outputs[0]
+
+            # Filter detections by confidence
+            scores = output['scores'].cpu().numpy()
+            boxes = output['boxes'].cpu().numpy()
+            labels = output['labels'].cpu().numpy()
+
+            for i in range(len(scores)):
+                if scores[i] > self.confidence_threshold:
+                    detection = {
+                        'bbox': boxes[i],
+                        'score': scores[i],
+                        'class_id': labels[i],
+                        'class_name': self.classes[labels[i]] if labels[i] < len(self.classes) else f'unknown_{labels[i]}'
+                    }
+                    detections.append(detection)
+
+        return detections
+
+    def create_detection_message(self, detections, header):
+        """
+        Create Detection2DArray message from detections.
+        """
+        detection_array = Detection2DArray()
+        detection_array.header = header
+
+        for detection in detections:
+            detection_2d = Detection2D()
+            detection_2d.header = header
+
+            # Set bounding box
+            bbox = detection['bbox']
+            detection_2d.bbox.center.x = (bbox[0] + bbox[2]) / 2.0
+            detection_2d.bbox.center.y = (bbox[1] + bbox[3]) / 2.0
+            detection_2d.bbox.size_x = bbox[2] - bbox[0]
+            detection_2d.bbox.size_y = bbox[3] - bbox[1]
+
+            # Set hypothesis
+            hypothesis = ObjectHypothesisWithPose()
+            hypothesis.hypothesis.class_id = str(detection['class_id'])
+            hypothesis.hypothesis.score = float(detection['score'])
+            detection_2d.results.append(hypothesis)
+
+            detection_array.detections.append(detection_2d)
+
+        return detection_array
+
+    def draw_detections(self, image, detections):
+        """
+        Draw detection results on the image.
+        """
+        output_image = image.copy()
+
+        for detection in detections:
+            bbox = detection['bbox']
+            score = detection['score']
+            class_name = detection['class_name']
+
+            # Draw bounding box
+            cv2.rectangle(
+                output_image,
+                (int(bbox[0]), int(bbox[1])),
+                (int(bbox[2]), int(bbox[3])),
+                (0, 255, 0),
+                2
+            )
+
+            # Draw label
+            label = f'{class_name}: {score:.2f}'
+            cv2.putText(
+                output_image,
+                label,
+                (int(bbox[0]), int(bbox[1]) - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 255, 0),
+                2
+            )
+
+        return output_image
+
+
+class SyntheticDataTrainer(Node):
+    """
+    Node for training object detection models with synthetic data.
+    """
+
+    def __init__(self):
+        super().__init__('synthetic_data_trainer')
+
+        # Parameters
+        self.declare_parameters(
+            namespace='',
+            parameters=[
+                ('synthetic_data_path', '/data/synthetic'),
+                ('real_data_path', '/data/real'),
+                ('model_save_path', '/models/trained'),
+                ('epochs', 100),
+                ('batch_size', 8),
+                ('learning_rate', 0.001),
+            ]
+        )
+
+        self.synthetic_data_path = self.get_parameter('synthetic_data_path').value
+        self.real_data_path = self.get_parameter('real_data_path').value
+        self.model_save_path = self.get_parameter('model_save_path').value
+        self.epochs = self.get_parameter('epochs').value
+        self.batch_size = self.get_parameter('batch_size').value
+        self.learning_rate = self.get_parameter('learning_rate').value
+
+        # Initialize model and training components
+        self.model = self.initialize_model()
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.criterion = torch.nn.CrossEntropyLoss()
+
+        self.get_logger().info('Synthetic Data Trainer initialized')
+
+    def initialize_model(self):
+        """
+        Initialize the object detection model.
+        """
+        # Initialize model (example with Faster R-CNN)
+        model = fasterrcnn_resnet50_fpn(pretrained=True)
+
+        # Modify the classifier for your specific classes
+        # num_classes = len(self.classes) + 1  # +1 for background
+        # in_features = model.roi_heads.box_predictor.cls_score.in_features
+        # model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+
+        return model
+
+    def train_model(self):
+        """
+        Train the model using synthetic and real data.
+        """
+        self.get_logger().info('Starting training...')
+
+        # Load datasets
+        synthetic_dataset = self.load_dataset(self.synthetic_data_path)
+        real_dataset = self.load_dataset(self.real_data_path)
+
+        # Training loop
+        for epoch in range(self.epochs):
+            # Train on synthetic data
+            self.train_epoch(synthetic_dataset, epoch, 'synthetic')
+
+            # Fine-tune on real data (smaller learning rate)
+            if epoch % 10 == 0:  # Fine-tune every 10 epochs
+                self.train_epoch(real_dataset, epoch, 'real')
+
+            # Validate model
+            if epoch % 5 == 0:
+                self.validate_model()
+
+            # Save model checkpoint
+            if epoch % 20 == 0:
+                self.save_model(epoch)
+
+        self.get_logger().info('Training completed')
+
+    def load_dataset(self, data_path):
+        """
+        Load dataset from the specified path.
+        """
+        # Implementation would load images and annotations
+        # This is a placeholder
+        pass
+
+    def train_epoch(self, dataset, epoch, data_type):
+        """
+        Train for one epoch.
+        """
+        self.model.train()
+        total_loss = 0.0
+
+        # Training logic here
+        # This is a simplified example
+        pass
+
+    def validate_model(self):
+        """
+        Validate the model on validation set.
+        """
+        self.model.eval()
+        # Validation logic here
+        pass
+
+    def save_model(self, epoch):
+        """
+        Save the trained model.
+        """
+        model_path = f"{self.model_save_path}/model_epoch_{epoch}.pth"
+        torch.save(self.model.state_dict(), model_path)
+        self.get_logger().info(f'Model saved to {model_path}')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    # Choose which node to run based on command line arguments
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == 'train':
+        node = SyntheticDataTrainer()
+        node.train_model()
+    else:
+        node = IsaacObjectDetector()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Shutting down...')
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### src/synthetic_data_generator.py
+```python
+#!/usr/bin/env python3
+
+"""
+Synthetic Data Generator for Isaac Object Recognition
+"""
+
+import numpy as np
+import cv2
+import random
+import os
+from dataclasses import dataclass
+from typing import List, Tuple, Dict
+import json
+from PIL import Image, ImageDraw, ImageFont
+
+
+@dataclass
+class SceneConfig:
+    """
+    Configuration for synthetic scene generation.
+    """
+    lighting: Dict
+    materials: Dict
+    textures: Dict
+    objects: List[Dict]
+    camera: Dict
+
+
+class SyntheticSceneGenerator:
+    """
+    Generate synthetic scenes for object recognition training.
+    """
+
+    def __init__(self, config_path: str):
+        self.config = self.load_config(config_path)
+        self.object_library = self.load_object_library()
+        self.texture_library = self.load_texture_library()
+
+    def load_config(self, config_path: str) -> Dict:
+        """
+        Load configuration from YAML file.
+        """
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
+
+    def load_object_library(self) -> List[Dict]:
+        """
+        Load 3D object models and their properties.
+        """
+        # This would load 3D models from Isaac Sim or other sources
+        objects = [
+            {'name': 'chair', 'model_path': '/models/chair.obj', 'scale_range': [0.8, 1.2]},
+            {'name': 'table', 'model_path': '/models/table.obj', 'scale_range': [0.5, 1.5]},
+            {'name': 'bottle', 'model_path': '/models/bottle.obj', 'scale_range': [0.9, 1.1]},
+            {'name': 'cup', 'model_path': '/models/cup.obj', 'scale_range': [0.8, 1.2]},
+            {'name': 'laptop', 'model_path': '/models/laptop.obj', 'scale_range': [0.95, 1.05]},
+        ]
+        return objects
+
+    def load_texture_library(self) -> List[str]:
+        """
+        Load texture images for domain randomization.
+        """
+        # This would load texture files from Isaac Sim or other sources
+        return ['/textures/wood1.jpg', '/textures/metal1.jpg', '/textures/fabric1.jpg']
+
+    def generate_scene(self) -> Tuple[np.ndarray, List[Dict]]:
+        """
+        Generate a synthetic scene with randomized parameters.
+        """
+        # Generate base image (background)
+        width, height = 640, 480
+        image = self.generate_background(width, height)
+
+        # Randomize lighting
+        lighting = self.randomize_lighting()
+
+        # Place objects in scene
+        objects = []
+        num_objects = random.randint(1, 5)
+
+        for _ in range(num_objects):
+            obj_info = self.place_random_object(image, width, height)
+            if obj_info:
+                objects.append(obj_info)
+
+        # Apply post-processing effects
+        image = self.apply_post_processing(image, lighting)
+
+        return image, objects
+
+    def generate_background(self, width: int, height: int) -> np.ndarray:
+        """
+        Generate a background image.
+        """
+        # Create a simple gradient background
+        background = np.zeros((height, width, 3), dtype=np.uint8)
+
+        # Add gradient
+        for y in range(height):
+            intensity = int(50 + (y / height) * 100)
+            background[y, :, :] = [intensity, intensity, intensity + 20]
+
+        return background
+
+    def randomize_lighting(self) -> Dict:
+        """
+        Randomize lighting parameters.
+        """
+        lighting = {
+            'intensity': random.uniform(0.3, 2.0),
+            'color_temperature': random.randint(3000, 8000),
+            'direction': [
+                random.uniform(-1, 1),
+                random.uniform(-1, 1),
+                random.uniform(-1, 0)  # Light comes from above
+            ]
+        }
+        return lighting
+
+    def place_random_object(self, image: np.ndarray, width: int, height: int) -> Dict:
+        """
+        Place a random object in the scene and return its annotation.
+        """
+        # Select random object
+        obj = random.choice(self.object_library)
+
+        # Random position and scale
+        x = random.randint(50, width - 50)
+        y = random.randint(50, height - 50)
+        scale = random.uniform(obj['scale_range'][0], obj['scale_range'][1])
+
+        # Create simple 2D representation (in a real implementation, this would use 3D rendering)
+        obj_image = self.create_object_image(obj['name'], scale)
+
+        if obj_image is not None:
+            # Place object in image
+            obj_h, obj_w = obj_image.shape[:2]
+            start_y = max(0, y - obj_h // 2)
+            end_y = min(height, start_y + obj_h)
+            start_x = max(0, x - obj_w // 2)
+            end_x = min(width, start_x + obj_w)
+
+            if start_y < end_y and start_x < end_x:
+                # Calculate region of interest
+                roi_y_start = max(0, obj_h // 2 - y)
+                roi_y_end = roi_y_start + (end_y - start_y)
+                roi_x_start = max(0, obj_w // 2 - x)
+                roi_x_end = roi_x_start + (end_x - start_x)
+
+                if roi_y_end <= obj_h and roi_x_end <= obj_w:
+                    roi = obj_image[roi_y_start:roi_y_end, roi_x_start:roi_x_end]
+
+                    # Blend object with background
+                    alpha = 0.7
+                    image[start_y:end_y, start_x:end_x] = (
+                        alpha * roi + (1 - alpha) * image[start_y:end_y, start_x:end_x]
+                    ).astype(np.uint8)
+
+            # Return annotation
+            return {
+                'name': obj['name'],
+                'bbox': [x - obj_w//2, y - obj_h//2, x + obj_w//2, y + obj_h//2],
+                'position': [x, y],
+                'scale': scale
+            }
+
+        return None
+
+    def create_object_image(self, obj_name: str, scale: float) -> np.ndarray:
+        """
+        Create a simple 2D representation of an object.
+        """
+        # This is a simplified implementation
+        # In a real implementation, this would use 3D rendering
+        if obj_name == 'chair':
+            # Create a simple chair shape
+            h, w = int(80 * scale), int(60 * scale)
+            img = np.ones((h, w, 3), dtype=np.uint8) * 200  # Light gray
+            # Add chair details
+            cv2.rectangle(img, (w//4, 0), (3*w//4, h//4), (100, 100, 100), -1)  # Seat
+            cv2.rectangle(img, (w//3, h//4), (w//3+5, h), (50, 50, 50), -1)    # Leg
+            cv2.rectangle(img, (2*w//3-5, h//4), (2*w//3, h), (50, 50, 50), -1)  # Leg
+            return img
+        elif obj_name == 'table':
+            h, w = int(60 * scale), int(100 * scale)
+            img = np.ones((h, w, 3), dtype=np.uint8) * 180  # Table color
+            cv2.rectangle(img, (0, 0), (w, h//4), (100, 70, 50), -1)  # Top
+            cv2.rectangle(img, (w//4, h//4), (w//4+5, h), (80, 50, 30), -1)  # Leg
+            cv2.rectangle(img, (3*w//4-5, h//4), (3*w//4, h), (80, 50, 30), -1)  # Leg
+            return img
+        else:
+            # Create a simple colored rectangle for other objects
+            h, w = int(50 * scale), int(50 * scale)
+            color_map = {
+                'bottle': [0, 100, 200],  # Orange
+                'cup': [200, 100, 0],     # Blue-orange
+                'laptop': [50, 50, 50]    # Dark gray
+            }
+            color = color_map.get(obj_name, [150, 150, 150])
+            img = np.ones((h, w, 3), dtype=np.uint8) * color
+            return img
+
+        return None
+
+    def apply_post_processing(self, image: np.ndarray, lighting: Dict) -> np.ndarray:
+        """
+        Apply post-processing effects like noise, blur, etc.
+        """
+        # Apply lighting effects
+        intensity = lighting['intensity']
+        image = np.clip(image.astype(np.float32) * intensity, 0, 255).astype(np.uint8)
+
+        # Add noise
+        noise_std = random.uniform(0, 0.02) * 255
+        noise = np.random.normal(0, noise_std, image.shape).astype(np.uint8)
+        image = np.clip(image.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+
+        # Apply blur
+        blur_amount = random.uniform(0, 1.0)
+        if blur_amount > 0.1:
+            kernel_size = int(blur_amount * 2) * 2 + 1  # Ensure odd
+            image = cv2.GaussianBlur(image, (kernel_size, kernel_size), 0)
+
+        return image
+
+    def generate_dataset(self, num_samples: int, output_dir: str):
+        """
+        Generate a complete synthetic dataset.
+        """
+        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(os.path.join(output_dir, 'images'), exist_ok=True)
+        os.makedirs(os.path.join(output_dir, 'annotations'), exist_ok=True)
+
+        annotations = []
+
+        for i in range(num_samples):
+            # Generate scene
+            image, objects = self.generate_scene()
+
+            # Save image
+            image_path = os.path.join(output_dir, 'images', f'scene_{i:06d}.png')
+            cv2.imwrite(image_path, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+
+            # Save annotation
+            annotation = {
+                'image_path': image_path,
+                'objects': objects,
+                'width': image.shape[1],
+                'height': image.shape[0]
+            }
+            annotations.append(annotation)
+
+            # Save individual annotation file
+            annotation_path = os.path.join(output_dir, 'annotations', f'scene_{i:06d}.json')
+            with open(annotation_path, 'w') as f:
+                json.dump(annotation, f, indent=2)
+
+            if i % 100 == 0:
+                self.get_logger().info(f'Generated {i}/{num_samples} samples')
+
+        # Save overall annotation file
+        overall_annotation_path = os.path.join(output_dir, 'annotations.json')
+        with open(overall_annotation_path, 'w') as f:
+            json.dump(annotations, f, indent=2)
+
+        self.get_logger().info(f'Dataset generation completed. {num_samples} samples saved to {output_dir}')
+
+
+def main():
+    """
+    Main function to generate synthetic dataset.
+    """
+    generator = SyntheticSceneGenerator('config/synthetic_data_config.yaml')
+    generator.generate_dataset(num_samples=10000, output_dir='/data/synthetic/object_recognition')
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### launch/object_recognition.launch.py
+```python
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+
+
+def generate_launch_description():
+    # Declare launch arguments
+    model_path_arg = DeclareLaunchArgument(
+        'model_path',
+        default_value='/models/trained/object_detector.pth',
+        description='Path to the trained model'
+    )
+
+    config_path_arg = DeclareLaunchArgument(
+        'config_path',
+        default_value=PathJoinSubstitution([
+            FindPackageShare('object_recognition_isaac'),
+            'config',
+            'object_recognition.yaml'
+        ]),
+        description='Path to the configuration file'
+    )
+
+    # Object detection node
+    object_detection_node = Node(
+        package='object_recognition_isaac',
+        executable='object_detector',
+        name='isaac_object_detector',
+        parameters=[
+            LaunchConfiguration('config_path'),
+            {'model_path': LaunchConfiguration('model_path')}
+        ],
+        remappings=[
+            ('/camera/rgb/image_rect_color', '/rgb_camera/image'),
+            ('/camera/rgb/camera_info', '/rgb_camera/camera_info'),
+        ],
+        output='screen'
+    )
+
+    # Isaac perception pipeline node (if using Isaac ROS)
+    perception_pipeline_node = Node(
+        package='isaac_ros_perceptor',
+        executable='object_perceptor_node',
+        name='object_perceptor',
+        parameters=[
+            LaunchConfiguration('config_path')
+        ],
+        output='screen'
+    )
+
+    return LaunchDescription([
+        model_path_arg,
+        config_path_arg,
+        object_detection_node,
+        perception_pipeline_node
+    ])
+```
+
+## Training Script
+
+### scripts/train_model.py
+```python
+#!/usr/bin/env python3
+
+"""
+Training script for object recognition model using Isaac synthetic data
+"""
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, Dataset
+import torchvision.transforms as transforms
+import torchvision.models as models
+from torchvision.models.detection import fasterrcnn_resnet50_fpn
+import numpy as np
+import os
+import json
+import cv2
+from PIL import Image
+
+
+class SyntheticObjectDataset(Dataset):
+    """
+    Dataset class for synthetic object recognition data.
+    """
+
+    def __init__(self, data_dir, transform=None):
+        self.data_dir = data_dir
+        self.transform = transform
+        self.image_paths = []
+        self.annotations = []
+
+        # Load all image paths and annotations
+        annotations_path = os.path.join(data_dir, 'annotations.json')
+        with open(annotations_path, 'r') as f:
+            annotations_data = json.load(f)
+
+        for item in annotations_data:
+            self.image_paths.append(item['image_path'])
+            self.annotations.append(item['objects'])
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        # Load image
+        image_path = self.image_paths[idx]
+        image = cv2.imread(image_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        # Load annotations
+        objects = self.annotations[idx]
+
+        # Convert to tensors
+        image_tensor = self.transform(Image.fromarray(image)) if self.transform else torch.from_numpy(image).permute(2, 0, 1)
+
+        # Create target dictionary for object detection
+        target = {
+            'boxes': torch.zeros((len(objects), 4)),  # [x1, y1, x2, y2]
+            'labels': torch.zeros(len(objects), dtype=torch.int64),
+            'image_id': torch.tensor([idx])
+        }
+
+        for i, obj in enumerate(objects):
+            bbox = obj['bbox']
+            target['boxes'][i] = torch.tensor(bbox)
+            # Convert class name to class ID (simplified)
+            class_id = self.class_name_to_id(obj['name'])
+            target['labels'][i] = torch.tensor(class_id)
+
+        return image_tensor, target
+
+    def class_name_to_id(self, class_name):
+        """
+        Convert class name to class ID.
+        """
+        class_map = {
+            'person': 1,
+            'chair': 2,
+            'table': 3,
+            'bottle': 4,
+            'cup': 5,
+            'laptop': 6
+        }
+        return class_map.get(class_name, 0)  # 0 for background
+
+
+def collate_fn(batch):
+    """
+    Collate function for object detection dataset.
+    """
+    images, targets = zip(*batch)
+    return list(images), list(targets)
+
+
+def train_model():
+    """
+    Train the object detection model.
+    """
+    # Configuration
+    data_dir = '/data/synthetic/object_recognition'
+    num_epochs = 50
+    batch_size = 4
+    learning_rate = 0.001
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    print(f'Using device: {device}')
+
+    # Data transforms
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize((640, 480)),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+    # Create dataset and dataloader
+    dataset = SyntheticObjectDataset(data_dir, transform=transform)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+
+    # Initialize model
+    model = fasterrcnn_resnet50_fpn(pretrained=True)
+
+    # Modify the classifier for our classes (num_classes = 7: 6 objects + 1 background)
+    in_features = model.roi_heads.box_predictor.cls_score.in_features
+    model.roi_heads.box_predictor = models.detection.faster_rcnn.FastRCNNPredictor(in_features, num_classes=7)
+
+    model.to(device)
+
+    # Optimizer
+    params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = optim.SGD(params, lr=learning_rate, momentum=0.9, weight_decay=0.0005)
+
+    # Learning rate scheduler
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+
+    # Training loop
+    model.train()
+    for epoch in range(num_epochs):
+        epoch_loss = 0.0
+
+        for batch_idx, (images, targets) in enumerate(dataloader):
+            # Move images and targets to device
+            images = [img.to(device) for img in images]
+            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+
+            # Forward pass
+            loss_dict = model(images, targets)
+            losses = sum(loss for loss in loss_dict.values())
+
+            # Backward pass
+            optimizer.zero_grad()
+            losses.backward()
+            optimizer.step()
+
+            epoch_loss += losses.item()
+
+            if batch_idx % 10 == 0:
+                print(f'Epoch {epoch+1}/{num_epochs}, Batch {batch_idx}, Loss: {losses.item():.4f}')
+
+        # Update learning rate
+        lr_scheduler.step()
+
+        # Print epoch statistics
+        avg_loss = epoch_loss / len(dataloader)
+        print(f'Epoch {epoch+1}/{num_epochs}, Average Loss: {avg_loss:.4f}')
+
+        # Save model checkpoint
+        if (epoch + 1) % 10 == 0:
+            torch.save(model.state_dict(), f'model_epoch_{epoch+1}.pth')
+
+    # Save final model
+    torch.save(model.state_dict(), 'final_model.pth')
+    print('Training completed. Model saved as final_model.pth')
+
+
+if __name__ == '__main__':
+    train_model()
+```
+
+This project demonstrates how to use NVIDIA Isaac for object recognition with synthetic data generation, including training and deployment components.

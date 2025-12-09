@@ -1,0 +1,269 @@
+# Unity Sensor Visualization Project
+
+This directory contains a Unity project that demonstrates sensor visualization for robots. The project includes:
+
+## Project Structure
+```
+unity_sensor_viz/
+├── Assets/
+│   ├── Scripts/
+│   │   ├── RobotVisualizer.cs
+│   │   ├── SensorVisualizer.cs
+│   │   └── ROSCommunication.cs
+│   ├── Materials/
+│   ├── Models/
+│   ├── Scenes/
+│   │   └── SensorVisualization.unity
+│   └── Prefabs/
+│       └── Robot.prefab
+├── ProjectSettings/
+└── Packages/
+    └── manifest.json
+```
+
+## RobotVisualizer.cs
+```csharp
+using UnityEngine;
+using System.Collections.Generic;
+
+public class RobotVisualizer : MonoBehaviour
+{
+    [System.Serializable]
+    public class JointMapping
+    {
+        public string jointName;
+        public Transform jointTransform;
+        public JointType jointType;
+    }
+
+    public enum JointType
+    {
+        Revolute,
+        Prismatic,
+        Fixed
+    }
+
+    public List<JointMapping> jointMappings = new List<JointMapping>();
+
+    // Update joint positions based on received joint states
+    public void UpdateJointPositions(Dictionary<string, float> jointPositions)
+    {
+        foreach (var jointMapping in jointMappings)
+        {
+            if (jointPositions.ContainsKey(jointMapping.jointName))
+            {
+                float position = jointPositions[jointMapping.jointName];
+
+                switch (jointMapping.jointType)
+                {
+                    case JointType.Revolute:
+                        jointMapping.jointTransform.localEulerAngles =
+                            new Vector3(position * Mathf.Rad2Deg, 0, 0);
+                        break;
+                    case JointType.Prismatic:
+                        jointMapping.jointTransform.localPosition =
+                            new Vector3(0, 0, position);
+                        break;
+                }
+            }
+        }
+    }
+}
+```
+
+## SensorVisualizer.cs
+```csharp
+using UnityEngine;
+using System.Collections.Generic;
+
+public class SensorVisualizer : MonoBehaviour
+{
+    [System.Serializable]
+    public class SensorVisualization
+    {
+        public string sensorName;
+        public GameObject sensorObject;
+        public GameObject visualizationObject;
+    }
+
+    public List<SensorVisualization> sensorVisualizations = new List<SensorVisualization>();
+    public Material detectionMaterial;
+    public Material freeSpaceMaterial;
+
+    public void UpdateLidarVisualization(string sensorName, float[] ranges, float angleMin, float angleIncrement)
+    {
+        var viz = sensorVisualizations.Find(s => s.sensorName == sensorName);
+        if (viz != null && viz.visualizationObject != null)
+        {
+            // Create visualization based on LiDAR data
+            CreateLidarVisualization(viz.visualizationObject, ranges, angleMin, angleIncrement);
+        }
+    }
+
+    private void CreateLidarVisualization(GameObject vizObject, float[] ranges, float angleMin, float angleIncrement)
+    {
+        // Clear previous visualization
+        foreach (Transform child in vizObject.transform)
+        {
+            DestroyImmediate(child.gameObject);
+        }
+
+        // Create visualization points for each range measurement
+        for (int i = 0; i < ranges.Length; i++)
+        {
+            if (float.IsFinite(ranges[i]))
+            {
+                float angle = angleMin + i * angleIncrement;
+                Vector3 position = new Vector3(
+                    ranges[i] * Mathf.Cos(angle),
+                    0,
+                    ranges[i] * Mathf.Sin(angle)
+                );
+
+                GameObject point = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                point.transform.SetParent(vizObject.transform);
+                point.transform.localPosition = position;
+                point.transform.localScale = Vector3.one * 0.05f;
+                point.GetComponent<Renderer>().material = detectionMaterial;
+                DestroyImmediate(point.GetComponent<Collider>()); // Remove collider for visualization
+            }
+        }
+    }
+
+    public void UpdateCameraVisualization(string sensorName, Texture2D imageTexture)
+    {
+        var viz = sensorVisualizations.Find(s => s.sensorName == sensorName);
+        if (viz != null && viz.visualizationObject != null)
+        {
+            var renderer = viz.visualizationObject.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.material.mainTexture = imageTexture;
+            }
+        }
+    }
+}
+```
+
+## ROSCommunication.cs
+```csharp
+using UnityEngine;
+using ROS2;
+using System.Collections.Generic;
+using sensor_msgs;
+using std_msgs;
+
+public class ROSCommunication : MonoBehaviour
+{
+    private ROS2UnityComponent ros2Component;
+    private RobotVisualizer robotVisualizer;
+    private SensorVisualizer sensorVisualizer;
+
+    void Start()
+    {
+        ros2Component = GetComponent<ROS2UnityComponent>();
+        ros2Component.Initialize();
+
+        robotVisualizer = GetComponent<RobotVisualizer>();
+        sensorVisualizer = GetComponent<SensorVisualizer>();
+
+        // Subscribe to joint states
+        ros2Component.CreateSubscription<JointState>("/joint_states", JointStateCallback);
+
+        // Subscribe to sensor data
+        ros2Component.CreateSubscription<LaserScan>("/laser_scan", LaserScanCallback);
+        ros2Component.CreateSubscription<Image>("/camera/image_raw", ImageCallback);
+    }
+
+    void JointStateCallback(JointState jointState)
+    {
+        if (robotVisualizer != null)
+        {
+            var jointPositions = new Dictionary<string, float>();
+
+            for (int i = 0; i < jointState.name.Count; i++)
+            {
+                if (i < jointState.position.Count)
+                {
+                    jointPositions[jointState.name[i]] = (float)jointState.position[i];
+                }
+            }
+
+            robotVisualizer.UpdateJointPositions(jointPositions);
+        }
+    }
+
+    void LaserScanCallback(LaserScan scan)
+    {
+        if (sensorVisualizer != null)
+        {
+            var ranges = new float[scan.ranges.Count];
+            for (int i = 0; i < scan.ranges.Count; i++)
+            {
+                ranges[i] = (float)scan.ranges[i];
+            }
+
+            sensorVisualizer.UpdateLidarVisualization(
+                "laser_scan",
+                ranges,
+                (float)scan.angle_min,
+                (float)scan.angle_increment
+            );
+        }
+    }
+
+    void ImageCallback(Image image)
+    {
+        if (sensorVisualizer != null)
+        {
+            // Convert ROS Image to Unity Texture2D
+            Texture2D texture = ConvertImageToTexture(image);
+            sensorVisualizer.UpdateCameraVisualization("camera", texture);
+        }
+    }
+
+    Texture2D ConvertImageToTexture(Image image)
+    {
+        // Convert ROS Image message to Unity Texture2D
+        // This is a simplified example - real implementation would depend on image format
+        Texture2D texture = new Texture2D((int)image.width, (int)image.height);
+
+        // Fill with dummy data for example
+        Color[] colors = new Color[image.width * image.height];
+        for (int i = 0; i < colors.Length; i++)
+        {
+            colors[i] = Color.gray;
+        }
+        texture.SetPixels(colors);
+        texture.Apply();
+
+        return texture;
+    }
+
+    void OnDestroy()
+    {
+        if (ros2Component != null)
+        {
+            ros2Component.Shutdown();
+        }
+    }
+}
+```
+
+## Sample Unity Scene Configuration
+
+The scene includes:
+- A main camera for visualization
+- A robot model with joint hierarchy
+- Sensor visualization objects
+- ROS communication component
+- Lighting setup for visualization
+
+To use this project:
+1. Install Unity 2021.3 or later
+2. Import the ROS-TCP-Connector package
+3. Add your robot model to the scene
+4. Configure joint mappings in the RobotVisualizer component
+5. Set up sensor visualization objects
+6. Configure ROS topic names for communication
+```
