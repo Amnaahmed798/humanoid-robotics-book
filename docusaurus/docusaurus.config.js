@@ -8,13 +8,13 @@ const config = {
   favicon: 'img/favicon.ico',
 
   // Set the production url of your site here
-  url: 'https://your-username.github.io',
+  url: 'https://Claude-Code.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/humanoid-robotics-book/',
 
   // GitHub pages deployment config.
-  organizationName: 'your-username', // Usually your GitHub org/user name.
+  organizationName: 'Claude-Code', // Usually your GitHub org/user name.
   projectName: 'humanoid-robotics-book', // Usually your repo name.
 
   onBrokenLinks: 'throw',
@@ -46,7 +46,7 @@ const config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/your-username/your-project/tree/main/packages/create-docusaurus/templates/shared/',
+            'https://github.com/Claude-Code/humanoid-robotics-book/edit/main/',
         },
         blog: false, // Disable blog for this project
         theme: {
@@ -75,7 +75,7 @@ const config = {
             label: 'Book',
           },
           {
-            href: 'https://github.com/your-username/humanoid-robotics-book',
+            href: 'https://github.com/Claude-Code/humanoid-robotics-book',
             label: 'GitHub',
             position: 'right',
           },
