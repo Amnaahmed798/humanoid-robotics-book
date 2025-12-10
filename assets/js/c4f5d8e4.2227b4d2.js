@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocusaurus=self.webpackChunkdocusaurus||[]).push([[634],{192:(u,s,o)=>{o.r(s),o.d(s,{default:()=>t});o(6540);var r=o(6347),c=o(4848);const t=function(){return(0,c.jsx)(r.rd,{to:"/humanoid-robotics-book/docs/intro"})}}}]);
