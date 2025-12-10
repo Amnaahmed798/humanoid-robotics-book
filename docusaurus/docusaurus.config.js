@@ -5,7 +5,7 @@
 const config = {
   title: 'Physical AI & Humanoid Robotics Book',
   tagline: 'A comprehensive guide to developing autonomous humanoid robots using ROS 2, NVIDIA Isaac, and AI technologies',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.svg',
 
   // Set the production url of your site here
   url: 'https://Amnaahmed798.github.io',
@@ -60,7 +60,7 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       // Replace with your project's social card
-      image: 'img/docusaurus-social-card.jpg',
+      image: 'img/docusaurus-social-card.svg',
       navbar: {
         title: 'Humanoid Robotics Book',
         logo: {

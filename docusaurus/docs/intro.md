@@ -4,9 +4,15 @@ sidebar_position: 1
 
 # Physical AI & Humanoid Robotics Book
 
+<div class="vibrant-section">
+
 Welcome to the comprehensive guide to developing autonomous humanoid robots using ROS 2, NVIDIA Isaac, and AI technologies.
 
+</div>
+
 ## About This Book
+
+<div class="feature-section">
 
 This book covers the complete stack for humanoid robotics development:
 
@@ -18,6 +24,20 @@ This book covers the complete stack for humanoid robotics development:
 
 - **Module 4**: Vision-Language-Action (VLA) - Implement multi-modal interaction systems, voice commands, cognitive planning, and the capstone autonomous humanoid project.
 
+</div>
+
 ## Getting Started
 
 Navigate through the modules using the sidebar to begin your journey in humanoid robotics development.
+
+<div class="module-card">
+
+### Key Technologies
+
+- **ROS 2**: Robot Operating System for building robot applications
+- **NVIDIA Isaac**: AI-powered robotics platform
+- **Gazebo & Unity**: Simulation environments for testing
+- **Python**: Primary programming language for robotics
+- **AI/VLA**: Vision-Language-Action systems for autonomous behavior
+
+</div>

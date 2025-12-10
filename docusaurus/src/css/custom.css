@@ -4,25 +4,236 @@
  * work well for content-centric websites.
  */
 
-/* You can override the default Infima variables here. */
+/* Vibrant color palette for humanoid robotics book */
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
+  --ifm-color-primary: #4a86e8; /* Vibrant blue */
+  --ifm-color-primary-dark: #3a76e8;
+  --ifm-color-primary-darker: #2a66e8;
+  --ifm-color-primary-darkest: #1a56d8;
+  --ifm-color-primary-light: #5a96f8;
+  --ifm-color-primary-lighter: #6aa6f8;
+  --ifm-color-primary-lightest: #7ab6f8;
+  --ifm-color-secondary: #e06666; /* Vibrant red */
+  --ifm-color-accent: #6fa8dc; /* Vibrant light blue */
+  --ifm-color-success: #93c47d; /* Vibrant green */
+  --ifm-color-warning: #ffd966; /* Vibrant yellow */
   --ifm-code-font-size: 95%;
+  --ifm-hero-background-color: linear-gradient(135deg, #4a86e8, #6fa8dc, #e06666);
+  --ifm-hero-text-color: #ffffff;
 }
 
 /* Dark theme */
 [data-theme='dark'] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
+  --ifm-color-primary: #6d9eeb;
+  --ifm-color-primary-dark: #5d8edb;
+  --ifm-color-primary-darker: #4d7eca;
+  --ifm-color-primary-darkest: #3d6eb9;
+  --ifm-color-primary-light: #7dbefb;
+  --ifm-color-primary-lighter: #8dcffc;
+  --ifm-color-primary-lightest: #9ddfff;
+  --ifm-color-secondary: #ea9999;
+  --ifm-color-accent: #a4c2f4;
+  --ifm-color-success: #b6d7a8;
+  --ifm-color-warning: #ffe599;
+  --ifm-hero-background-color: linear-gradient(135deg, #1a3c7d, #2a5b9d, #5a2a2a);
+  --ifm-hero-text-color: #ffffff;
+}
+
+/* Enhanced intro page styling */
+.hero {
+  background: var(--ifm-hero-background-color);
+  color: var(--ifm-hero-text-color);
+  padding: 4rem 2rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: grid-move 20s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes grid-move {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(50px, 50px);
+  }
+}
+
+.hero__title {
+  font-size: 3rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+  animation: title-pulse 3s infinite alternate;
+}
+
+@keyframes title-pulse {
+  from {
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+  }
+  to {
+    text-shadow: 3px 3px 6px rgba(0,0,0,0.5);
+  }
+}
+
+.hero__subtitle {
+  font-size: 1.5rem;
+  margin-bottom: 2rem;
+  opacity: 0.9;
+}
+
+/* Enhanced intro page content */
+.introduction-page {
+  background: linear-gradient(135deg, var(--ifm-color-primary-lightest) 0%, var(--ifm-color-accent) 100%);
+  background-attachment: fixed;
+  padding: 2rem 0;
+}
+
+.introduction-page .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.introduction-page h1,
+.introduction-page h2,
+.introduction-page h3 {
+  color: var(--ifm-color-primary-darkest);
+  text-shadow: 1px 1px 2px rgba(255,255,255,0.5);
+}
+
+.introduction-page p {
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: var(--ifm-color-primary-darkest);
+}
+
+.introduction-page .feature-section {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 15px;
+  padding: 2rem;
+  margin: 2rem 0;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  border-left: 5px solid var(--ifm-color-primary);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.introduction-page .feature-section:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+}
+
+/* Enhanced list styling */
+.introduction-page ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.introduction-page li {
+  position: relative;
+  padding-left: 2rem;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+}
+
+.introduction-page li::before {
+  content: "▶";
+  position: absolute;
+  left: 0;
+  color: var(--ifm-color-primary);
+  font-weight: bold;
+}
+
+/* Card-like elements for modules */
+.module-card {
+  background: linear-gradient(135deg, #ffffff, #f8f9fa);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+  border-top: 3px solid var(--ifm-color-primary);
+  transition: all 0.3s ease;
+}
+
+.module-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+}
+
+.module-card h3 {
+  color: var(--ifm-color-primary-darkest);
+  margin-top: 0;
+  border-bottom: 2px solid var(--ifm-color-accent);
+  padding-bottom: 0.5rem;
+}
+
+/* Animated gradient background for sections */
+.vibrant-section {
+  position: relative;
+  padding: 3rem 0;
+  overflow: hidden;
+}
+
+.vibrant-section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg,
+    var(--ifm-color-primary-lightest),
+    var(--ifm-color-accent),
+    var(--ifm-color-secondary),
+    var(--ifm-color-warning));
+  background-size: 400% 400%;
+  animation: gradient-animation 10s ease infinite;
+  opacity: 0.1;
+  z-index: -1;
+}
+
+@keyframes gradient-animation {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Enhanced buttons */
+.button--primary {
+  background: var(--ifm-color-primary);
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 4px 15px rgba(74, 134, 232, 0.4);
+  transition: all 0.3s ease;
+}
+
+.button--primary:hover {
+  background: var(--ifm-color-primary-darker);
+  border-color: var(--ifm-color-primary-darker);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(74, 134, 232, 0.6);
+}
+
+/* Enhanced code blocks */
+.code-block {
+  border-radius: 8px;
+  margin: 1rem 0;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+/* Footer enhancement */
+.footer {
+  background: linear-gradient(135deg, var(--ifm-color-primary-darkest), var(--ifm-color-primary-dark));
+  color: white;
 }
