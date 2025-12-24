@@ -6,16 +6,66 @@ package-lock.json
 .docusaurus/
 build/
 
-# Environment
-.env
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.manifest
+*.spec
 .venv/
-venv/
+env/
+ENV/
+.python-version
+.pytest_cache/
+.coverage
+htmlcov/
+.pyre/
+.mypy_cache/
+*.swp
+*.swo
+*~
+backend/__pycache__/
+backend/*.pyc
+backend/env/
+backend/.python-version
+backend/.env
+backend/.ENV
+backend/venv/
+
+# Environment variables
+.env*
+
+# Logs
+*.log
+logs/
+log/
 
 # OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
-*.swp
-*.swo
+desktop.ini
 
 # IDE
 .vscode/
@@ -23,3 +73,14 @@ Thumbs.db
 
 # Docusaurus cache
 .docusaurus/
+
+# Local configuration
+config.local
+*.local
+
+# Testing
+.coverage*
+coverage.xml
+htmlcov/
+.pytest_cache/
+.pytype/

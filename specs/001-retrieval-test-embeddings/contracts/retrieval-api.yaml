@@ -1,0 +1,222 @@
+openapi: 3.0.0
+info:
+  title: Retrieval & Test Embeddings API
+  description: API for retrieving and validating embeddings from Qdrant
+  version: 1.0.0
+paths:
+  /validate-retrieval:
+    post:
+      summary: Validate embedding retrieval with sample queries
+      description: Execute sample queries against Qdrant and validate that retrieved chunks match original book content
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                queries:
+                  type: array
+                  items:
+                    type: string
+                  description: Sample queries to execute against the Qdrant collection
+                  example: ["What are the key principles of humanoid robotics?", "Explain the kinematic chain in robotics"]
+                top_k:
+                  type: integer
+                  default: 3
+                  description: Number of results to retrieve for each query
+                similarity_threshold:
+                  type: number
+                  format: float
+                  default: 0.3
+                  minimum: 0.0
+                  maximum: 1.0
+                  description: Minimum similarity threshold for results
+                book_sections:
+                  type: array
+                  items:
+                    type: string
+                  description: Specific book sections to test against
+                  example: ["introduction", "kinematics", "control-systems"]
+              required:
+                - queries
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  validation_id:
+                    type: string
+                    description: Unique identifier for this validation run
+                  total_queries:
+                    type: integer
+                    description: Number of queries executed
+                  total_sections_tested:
+                    type: integer
+                    description: Number of book sections tested
+                  overall_accuracy:
+                    type: number
+                    format: float
+                    description: Overall accuracy percentage across all queries
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ValidationResult'
+                  logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ValidationLog'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /test-query:
+    post:
+      summary: Test a single query against Qdrant
+      description: Execute a single query and retrieve top-k results with validation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: Query text to execute against Qdrant
+                  example: "What are the main components of a humanoid robot?"
+                top_k:
+                  type: integer
+                  default: 3
+                  description: Number of results to retrieve
+                similarity_threshold:
+                  type: number
+                  format: float
+                  default: 0.3
+                  minimum: 0.0
+                  maximum: 1.0
+                  description: Minimum similarity threshold for results
+              required:
+                - query
+      responses:
+        '200':
+          description: Query results with validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResult'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    ValidationResult:
+      type: object
+      properties:
+        query_id:
+          type: string
+          description: Reference to the associated query
+        chunk_id:
+          type: string
+          description: Reference to the retrieved chunk
+        accuracy_score:
+          type: number
+          format: float
+          description: Measure of how well the chunk matches expected content
+        original_text:
+          type: string
+          description: The original book text for comparison
+        retrieved_text:
+          type: string
+          description: The text retrieved from Qdrant
+        validation_passed:
+          type: boolean
+          description: Whether the validation criteria were met
+        validation_details:
+          type: string
+          description: Explanation of validation results
+    ValidationLog:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the validation log entry
+        query:
+          type: string
+          description: The query text that was executed
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetrievedChunk'
+        validations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationResult'
+        overall_accuracy:
+          type: number
+          format: float
+          description: Overall accuracy percentage for the query
+        timestamp:
+          type: string
+          format: date-time
+          description: When the validation was performed
+        book_section:
+          type: string
+          description: Which book section was tested
+    RetrievedChunk:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the retrieved chunk
+        text:
+          type: string
+          description: The actual text content retrieved from the book
+        source_location:
+          type: string
+          description: Reference to the original location in the book (e.g., chapter, section)
+        similarity_score:
+          type: number
+          format: float
+          description: Cosine similarity score between query and chunk
+        metadata:
+          type: object
+          description: Additional metadata about the retrieval context
+    QueryResult:
+      type: object
+      properties:
+        query_id:
+          type: string
+          description: Unique identifier for this query
+        query:
+          type: string
+          description: The original query text
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetrievedChunk'
+        validations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationResult'
+        timestamp:
+          type: string
+          format: date-time
+          description: When the query was executed
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        details:
+          type: string
+          description: Additional error details

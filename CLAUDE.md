@@ -212,6 +212,10 @@ See `.specify/memory/constitution.md` for code quality, testing, performance, se
 ## Active Technologies
 - Python 3.11 (for ROS 2); specific versions for Unity/Isaac will be detailed in book modules. + ROS 2, Gazebo, Unity, NVIDIA Isaac SDK, LLM/VLA libraries (e.g., OpenAI Whisper). (001-humanoid-robotics-book)
 - N/A for book content; simulator environments will manage their own data. (001-humanoid-robotics-book)
+- Python 3.10+ + cohere, qdrant-client, requests, beautifulsoup4, uvicorn (001-embeddings-qdrant)
+- Qdrant Cloud (vector database) (001-embeddings-qdrant)
+- Python 3.10+ (as specified in feature constraints) + qdrant-client, cohere (as specified in feature constraints) (001-retrieval-test-embeddings)
+- Qdrant vector database (existing collection from previous step) (001-retrieval-test-embeddings)
 
 ## Recent Changes
 - 001-humanoid-robotics-book: Added Python 3.11 (for ROS 2); specific versions for Unity/Isaac will be detailed in book modules. + ROS 2, Gazebo, Unity, NVIDIA Isaac SDK, LLM/VLA libraries (e.g., OpenAI Whisper).

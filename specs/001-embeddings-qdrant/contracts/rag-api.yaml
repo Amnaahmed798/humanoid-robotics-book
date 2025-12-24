@@ -1,0 +1,392 @@
+openapi: 3.0.0
+info:
+  title: RAG Chatbot Backend API
+  description: API for extracting, processing, and storing book content for RAG chatbot use
+  version: 1.0.0
+  contact:
+    name: Humanoid Robotics Book Team
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+  - url: https://rag-api.example.com
+    description: Production server
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the service
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2025-12-10T10:00:00Z"
+
+  /extract:
+    post:
+      summary: Extract content from Docusaurus book
+      description: Extract and clean content from the deployed Docusaurus book
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - base_url
+              properties:
+                base_url:
+                  type: string
+                  description: Base URL of the deployed Docusaurus book
+                  example: "https://humanoid-robotics-book.com"
+                pages:
+                  type: array
+                  items:
+                    type: string
+                  description: Specific pages to extract (optional, extracts all if not provided)
+                  example: ["/docs/intro", "/docs/ros-setup"]
+      responses:
+        '200':
+          description: Content extraction started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                    description: ID of the extraction job
+                    example: "extract_12345"
+                  status:
+                    type: string
+                    description: Current status of the job
+                    example: "processing"
+                  total_pages:
+                    type: integer
+                    description: Number of pages to process
+                    example: 25
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /process:
+    post:
+      summary: Process extracted content into chunks and embeddings
+      description: Chunk text and generate embeddings for storage in vector database
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - job_id
+              properties:
+                job_id:
+                  type: string
+                  description: ID of the extraction job to process
+                  example: "extract_12345"
+                chunk_size:
+                  type: integer
+                  description: Target size for text chunks in tokens (default 512)
+                  example: 512
+                overlap:
+                  type: integer
+                  description: Overlap between chunks in tokens (default 50)
+                  example: 50
+      responses:
+        '200':
+          description: Processing started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                    description: ID of the processing job
+                    example: "process_67890"
+                  status:
+                    type: string
+                    description: Current status of the job
+                    example: "processing"
+                  total_chunks:
+                    type: integer
+                    description: Number of chunks to process
+                    example: 150
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /store:
+    post:
+      summary: Store embeddings in Qdrant vector database
+      description: Upload generated embeddings with metadata to Qdrant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - job_id
+              properties:
+                job_id:
+                  type: string
+                  description: ID of the processing job to store
+                  example: "process_67890"
+                collection_name:
+                  type: string
+                  description: Name of the Qdrant collection to store embeddings in
+                  example: "humanoid_robotics_book"
+      responses:
+        '200':
+          description: Storage process started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                    description: ID of the storage job
+                    example: "store_111213"
+                  status:
+                    type: string
+                    description: Current status of the job
+                    example: "uploading"
+                  total_embeddings:
+                    type: integer
+                    description: Number of embeddings to store
+                    example: 150
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /search:
+    post:
+      summary: Semantic search in the vector database
+      description: Find relevant text chunks based on semantic similarity to the query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+                - collection_name
+              properties:
+                query:
+                  type: string
+                  description: Search query text
+                  example: "What is a humanoid robot?"
+                collection_name:
+                  type: string
+                  description: Name of the Qdrant collection to search in
+                  example: "humanoid_robotics_book"
+                top_k:
+                  type: integer
+                  description: Number of results to return (default 5)
+                  example: 5
+                min_score:
+                  type: number
+                  description: Minimum similarity score (0.0 to 1.0, default 0.3)
+                  example: 0.5
+      responses:
+        '200':
+          description: Search results returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                    description: Original search query
+                    example: "What is a humanoid robot?"
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: ID of the matching chunk
+                          example: "chunk_abc123"
+                        score:
+                          type: number
+                          description: Similarity score (0.0 to 1.0)
+                          example: 0.85
+                        text:
+                          type: string
+                          description: Text content of the matching chunk
+                          example: "A humanoid robot is a robot with physical features resembling those of a human..."
+                        metadata:
+                          type: object
+                          description: Metadata associated with the chunk
+                          properties:
+                            page_url:
+                              type: string
+                              example: "/docs/intro"
+                            heading:
+                              type: string
+                              example: "Introduction to Humanoid Robotics"
+                            chunk_index:
+                              type: integer
+                              example: 0
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /validate:
+    post:
+      summary: Validate stored embeddings
+      description: Verify that the vector count matches chunk count and dimensions are correct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - collection_name
+              properties:
+                collection_name:
+                  type: string
+                  description: Name of the Qdrant collection to validate
+                  example: "humanoid_robotics_book"
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  collection_name:
+                    type: string
+                    example: "humanoid_robotics_book"
+                  vector_count:
+                    type: integer
+                    description: Number of vectors in the collection
+                    example: 150
+                  expected_count:
+                    type: integer
+                    description: Expected number of vectors
+                    example: 150
+                  vector_dimensions:
+                    type: integer
+                    description: Dimension of each vector
+                    example: 1024
+                  model_name:
+                    type: string
+                    description: Model used for embeddings
+                    example: "embed-multilingual-v3.0"
+                  is_valid:
+                    type: boolean
+                    description: Whether the collection passes validation
+                    example: true
+                  issues:
+                    type: array
+                    items:
+                      type: string
+                    description: List of validation issues (empty if valid)
+                    example: []
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /jobs/{job_id}:
+    get:
+      summary: Get job status
+      description: Retrieve the current status of a background job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID of the job to check
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                    example: "extract_12345"
+                  status:
+                    type: string
+                    description: Current status of the job
+                    enum: [pending, processing, completed, failed]
+                    example: "completed"
+                  progress:
+                    type: number
+                    description: Progress percentage (0.0 to 1.0)
+                    example: 1.0
+                  created_at:
+                    type: string
+                    format: date-time
+                    example: "2025-12-10T10:00:00Z"
+                  completed_at:
+                    type: string
+                    format: date-time
+                    example: "2025-12-10T10:05:00Z"
+                  details:
+                    type: object
+                    description: Additional job details
+                    example: {"processed_pages": 25, "errors": 0}
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  responses:
+    BadRequest:
+      description: Bad request - invalid input parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Invalid input parameters"
+              details:
+                type: object
+                example: {"base_url": "This field is required"}
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Resource not found"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication
+
+security:
+  - BearerAuth: []
